@@ -18,7 +18,7 @@ export default function WhiteboardApp() {
   const router = useRouter();
 
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null); // Added profile state
+  const [profile, setProfile] = useState(null);
   const [plan, setPlan] = useState("free");
 
   const [slides, setSlides] = useState([
@@ -30,6 +30,20 @@ export default function WhiteboardApp() {
       bg: "#ffffff",
     },
   ]);
+
+  /* -------------------- Background Update -------------------- */
+const updateBackground = (newBg) => {
+  pushUndo(); // allow undo for background change
+
+  setSlides((prev) => {
+    const updated = [...prev];
+    updated[activeSlide] = {
+      ...updated[activeSlide],
+      bg: newBg,
+    };
+    return updated;
+  });
+};
 
   const [activeSlide, setActiveSlide] = useState(0);
   const [tool, setTool] = useState("pen");
@@ -50,15 +64,14 @@ export default function WhiteboardApp() {
       } else {
         setUser(data.user);
 
-        // ✅ Updated to fetch all profile fields (*) including avatar_url
-        const { data: profileData, error } = await supabase
+        const { data: profileData } = await supabase
           .from("profiles")
-          .select("*") 
+          .select("*")
           .eq("id", data.user.id)
           .single();
 
         if (profileData) {
-          setProfile(profileData); // Store full profile for the Header
+          setProfile(profileData);
           setPlan(profileData.plan || "free");
         }
       }
@@ -152,8 +165,23 @@ export default function WhiteboardApp() {
   };
 
   /* -------------------- PNG Download -------------------- */
+  /* -------------------- PNG Download -------------------- */
   const handlePNGDownload = () => {
-    whiteboardRef.current?.download();
+    // 1. Get current date in YYYY-MM-DD format
+    const now = new Date();
+    const dateString = now.toISOString().split('T')[0]; 
+    
+    // 2. Get current slide number (index + 1)
+    const slideNumber = activeSlide + 1;
+    
+    // 3. Construct the filename
+    const filename = `whiteboard-slide-${slideNumber}-${dateString}.png`;
+
+    // 4. Trigger download with the name
+    // If your Whiteboard component's download method accepts a name:
+    if (whiteboardRef.current?.download) {
+      whiteboardRef.current.download(filename);
+    }
   };
 
   /* -------------------- PDF Download -------------------- */
@@ -196,22 +224,25 @@ export default function WhiteboardApp() {
           }
           ctx.stroke();
         }
-        // ... rest of your shape logic ...
+
         if (shape.tool === "line") {
           ctx.beginPath();
           ctx.moveTo(shape.points[0], shape.points[1]);
           ctx.lineTo(shape.points[2], shape.points[3]);
           ctx.stroke();
         }
+
         if (shape.tool === "rect") {
           ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
         }
+
         if (shape.tool === "circle") {
           ctx.beginPath();
           const radius = Math.sqrt(shape.width ** 2 + shape.height ** 2);
           ctx.arc(shape.x, shape.y, radius, 0, 2 * Math.PI);
           ctx.stroke();
         }
+
         if (shape.tool === "text") {
           ctx.fillStyle = shape.color;
           ctx.font = `${shape.fontSize || 24}px Arial`;
@@ -239,11 +270,12 @@ export default function WhiteboardApp() {
         e.preventDefault();
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [slides, activeSlide]);
 
-  /* -------------------- Toolbar Hover -------------------- */
+  /* -------------------- Toolbar Hover (FIXED) -------------------- */
   const resetHideTimer = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setShowToolbar(false), 1500);
@@ -261,21 +293,19 @@ export default function WhiteboardApp() {
         setActiveSlide={setActiveSlide}
         onAddSlide={handleAddSlide}
         user={user}
-        profile={profile} // ✅ Passing the fetched profile object
+        profile={profile}
         onLogout={handleLogout}
         isPremium={isPremium}
       />
 
-      <main className="flex-1 overflow-hidden relative">
-        <div
-          onMouseEnter={() => {
-            setShowToolbar(true);
-            resetHideTimer();
-          }}
-          onMouseLeave={resetHideTimer}
-          className="absolute top-0 left-0 w-full h-16 z-10"
-        />
-
+      <main
+        className="flex-1 overflow-hidden relative"
+        onMouseMove={() => {
+          setShowToolbar(true);
+          resetHideTimer();
+        }}
+      >
+        {/* Toolbar */}
         <div
           className={`absolute top-6 left-1/2 -translate-x-1/2 z-20
           transition-all duration-500 ease-in-out
@@ -287,20 +317,23 @@ export default function WhiteboardApp() {
         >
           <div className="backdrop-blur-md bg-white/80 shadow-xl rounded-2xl border border-white/40">
             <Toolbar
-              currentTool={tool}
-              setTool={setTool}
-              strokeColor={color}
-              setStrokeColor={setColor}
-              strokeWidth={width}
-              setStrokeWidth={setWidth}
-              onUndo={handleUndo}
-              onRedo={handleRedo}
-              canUndo={currentSlide.undoStack.length > 0}
-              canRedo={currentSlide.redoStack.length > 0}
-            />
+  currentTool={tool}
+  setTool={setTool}
+  strokeColor={color}
+  setStrokeColor={setColor}
+  strokeWidth={width}
+  setStrokeWidth={setWidth}
+  onUndo={handleUndo}
+  onRedo={handleRedo}
+  canUndo={currentSlide.undoStack.length > 0}
+  canRedo={currentSlide.redoStack.length > 0}
+  currentBg={currentSlide.bg}
+  setBackground={updateBackground}
+/>
           </div>
         </div>
 
+        {/* Whiteboard */}
         <div className="shadow-xl border border-gray-200 h-full">
           <Whiteboard
             ref={whiteboardRef}
@@ -315,6 +348,9 @@ export default function WhiteboardApp() {
           />
         </div>
       </main>
+      <footer className="h-4 bg-green-900 text-white text-xs flex items-center justify-center tracking-wide">
+  © {new Date().getFullYear()} ManoRekha Tech Innovation Product. All rights reserved.
+</footer>
     </div>
   );
 }

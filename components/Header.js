@@ -116,7 +116,7 @@ export default function Header({
               letterSpacing: "1px",
             }}
           >
-            ManoRekha
+            ManoRekha Whiteboard
           </span>
         </div>
 
@@ -248,17 +248,33 @@ export default function Header({
             }}
             onClick={() => setOpen(!open)}
           >
-            <Image
-              src={avatarSrc}
-              alt="User Avatar"
-              width={36}
-              height={36}
-              unoptimized
+            {/* ✅ FIXED AVATAR STYLE */}
+            <div
               style={{
+                width: "38px",
+                height: "38px",
                 borderRadius: "50%",
-                objectFit: "cover",
+                overflow: "hidden",
+                border: "2px solid #16a34a",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                flexShrink: 0,
               }}
-            />
+            >
+              <Image
+                src={avatarSrc}
+                alt="User Avatar"
+                width={38}
+                height={38}
+                unoptimized
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: "center",
+                }}
+              />
+            </div>
+
             <ChevronDown size={16} />
 
             {open && (

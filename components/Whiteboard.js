@@ -18,65 +18,101 @@ const Whiteboard = forwardRef(
       shapes,
       setShapes,
       onActionStart,
-      isPremium, // ✅ Destructure the new prop
+      isPremium,
     },
     ref,
   ) => {
     const stageRef = useRef(null);
+    const containerRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [dimensions, setDimensions] = useState({
-      width: typeof window !== "undefined" ? window.innerWidth - 60 : 1000,
-      height: typeof window !== "undefined" ? window.innerHeight - 100 : 800,
-    });
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const [pointerPos, setPointerPos] = useState(null);
 
-    const getCursor = () => {
-      if (currentTool === "select") return "move";
-      if (currentTool === "eraser") return "not-allowed";
-      if (currentTool === "text") return "text";
-      return "crosshair";
+    /* -------------------- Detect Dark Background -------------------- */
+    const isDarkBackground = (color) => {
+      if (!color) return false;
+      const hex = color.replace("#", "");
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness < 128;
     };
 
+    /* -------------------- Cursor Logic -------------------- */
+    const getCursorStyle = () => {
+      switch (currentTool) {
+        case "select":
+          return "move";
+        case "eraser":
+        case "pen":
+          return "none";
+        case "text":
+          return "text";
+        case "rect":
+        case "circle":
+        case "line":
+        case "arrow":
+          return "crosshair";
+        default:
+          return "default";
+      }
+    };
+
+    /* -------------------- Resize Handling -------------------- */
+    useEffect(() => {
+      const checkSize = () => {
+        if (containerRef.current) {
+          setDimensions({
+            width: containerRef.current.offsetWidth,
+            height: containerRef.current.offsetHeight,
+          });
+        }
+      };
+
+      const resizeObserver = new ResizeObserver(checkSize);
+      if (containerRef.current) {
+        resizeObserver.observe(containerRef.current);
+      }
+
+      checkSize();
+      return () => resizeObserver.disconnect();
+    }, []);
+
+    /* -------------------- Download PNG -------------------- */
     useImperativeHandle(ref, () => ({
-      download: () => {
+      download: (fileName = `whiteboard-${Date.now()}.png`) => {
         if (!stageRef.current) return;
+
         const dataURL = stageRef.current.toDataURL({
           pixelRatio: 2,
           backgroundColor: bgFill,
         });
+
         const link = document.createElement("a");
-        link.download = `whiteboard-${Date.now()}.png`;
+        link.download = fileName;
         link.href = dataURL;
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
       },
     }));
 
-    useEffect(() => {
-      const handleResize = () => {
-        setDimensions({
-          width: window.innerWidth - 60,
-          height: window.innerHeight - 100,
-        });
-      };
-      window.addEventListener("resize", handleResize);
-      handleResize();
-      return () => window.removeEventListener("resize", handleResize);
-    }, []);
-
     /* -------------------- Drawing Handlers -------------------- */
     const handlePointerDown = (e) => {
-      e.evt?.cancelable && e.evt.preventDefault();
       const stage = e.target.getStage();
       const pos = stage.getPointerPosition();
       if (!pos) return;
 
       setPointerPos(pos);
       if (currentTool === "select") return;
+
       onActionStart?.();
 
       if (currentTool === "text" && e.target.name() === "background") {
         const textInput = prompt("Enter text:");
         if (!textInput) return;
+
         setShapes([
           ...shapes,
           {
@@ -93,6 +129,7 @@ const Whiteboard = forwardRef(
       }
 
       setIsDrawing(true);
+
       setShapes([
         ...shapes,
         {
@@ -100,7 +137,8 @@ const Whiteboard = forwardRef(
           tool: currentTool,
           points: [pos.x, pos.y, pos.x, pos.y],
           color: currentTool === "eraser" ? bgFill : strokeColor,
-          strokeWidth: currentTool === "eraser" ? strokeWidth * 6 : strokeWidth,
+          strokeWidth:
+            currentTool === "eraser" ? strokeWidth * 6 : strokeWidth,
           x: pos.x,
           y: pos.y,
           width: 0,
@@ -113,23 +151,26 @@ const Whiteboard = forwardRef(
       const stage = e.target.getStage();
       const point = stage.getPointerPosition();
       if (!point) return;
+
       setPointerPos(point);
       if (!isDrawing) return;
-      e.evt?.cancelable && e.evt.preventDefault();
 
       const updatedShapes = shapes.map((s, i) => {
         if (i !== shapes.length - 1) return s;
         const lastShape = { ...s };
-        if (currentTool === "pen" || currentTool === "eraser")
+
+        if (currentTool === "pen" || currentTool === "eraser") {
           lastShape.points = lastShape.points.concat([point.x, point.y]);
-        else if (currentTool === "line" || currentTool === "arrow")
+        } else if (currentTool === "line" || currentTool === "arrow") {
           lastShape.points = [lastShape.x, lastShape.y, point.x, point.y];
-        else if (currentTool === "rect" || currentTool === "circle") {
+        } else if (currentTool === "rect" || currentTool === "circle") {
           lastShape.width = point.x - lastShape.x;
           lastShape.height = point.y - lastShape.y;
         }
+
         return lastShape;
       });
+
       setShapes(updatedShapes);
     };
 
@@ -142,21 +183,15 @@ const Whiteboard = forwardRef(
         ),
       );
 
+    /* -------------------- Render -------------------- */
     return (
-      <div
-        className="relative w-full h-full flex items-center justify-center "
-        style={{ padding: 20 }}
-      >
+      <div className="w-full h-full flex items-center justify-center p-4 md:p-8">
         <div
-          className="rounded-3xl overflow-hidden shadow-2xl transition-all duration-300"
+          ref={containerRef}
+          className="w-full h-full relative rounded-3xl overflow-hidden shadow-2xl border-2 border-gray-300"
           style={{
-            padding: 20,
-            width: dimensions.width,
-            height: dimensions.height,
             backgroundColor: bgFill,
-            border: "2px solid #ccc",
-            borderRadius: "24px",
-            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+            cursor: getCursorStyle(),
           }}
         >
           <Stage
@@ -166,9 +201,9 @@ const Whiteboard = forwardRef(
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             ref={stageRef}
-            className={getCursor()}
           >
             <Layer>
+              {/* Background */}
               <Rect
                 x={0}
                 y={0}
@@ -178,33 +213,35 @@ const Whiteboard = forwardRef(
                 name="background"
               />
 
-              {/* ✅ WATERMARK SECTION */}
+              {/* Watermark */}
               {!isPremium && (
                 <Text
                   x={dimensions.width / 2}
                   y={dimensions.height / 2}
                   text="ManoRekha Free Version"
-                  fontSize={40}
+                  fontSize={dimensions.width > 500 ? 40 : 20}
                   fontFamily="Arial"
-                  fill="#000"
-                  opacity={0.15} // Subtle transparency
+                  fill={isDarkBackground(bgFill) ? "#ffffff" : "#000000"}
+                  opacity={0.2}
                   align="center"
                   verticalAlign="middle"
-                  offsetX={200} // Centering adjustment based on approx width
-                  offsetY={20}
-                  listening={false} // So it doesn't block drawing
-                  rotation={-30} // Classic diagonal watermark look
+                  offsetX={dimensions.width > 500 ? 200 : 100}
+                  listening={false}
+                  rotation={-30}
                 />
               )}
 
+              {/* Shapes */}
               {shapes.map((shape) => {
                 const commonProps = {
                   stroke: shape.color,
                   strokeWidth: shape.strokeWidth,
-                  draggable: currentTool === "select" && shape.tool !== "text",
+                  draggable:
+                    currentTool === "select" && shape.tool !== "text",
                   lineCap: "round",
                   lineJoin: "round",
                 };
+
                 if (shape.tool === "pen" || shape.tool === "eraser")
                   return (
                     <Line
@@ -214,6 +251,7 @@ const Whiteboard = forwardRef(
                       tension={0.5}
                     />
                   );
+
                 if (shape.tool === "line")
                   return (
                     <Line
@@ -222,6 +260,7 @@ const Whiteboard = forwardRef(
                       points={shape.points}
                     />
                   );
+
                 if (shape.tool === "rect")
                   return (
                     <Rect
@@ -233,6 +272,7 @@ const Whiteboard = forwardRef(
                       height={shape.height}
                     />
                   );
+
                 if (shape.tool === "circle")
                   return (
                     <Circle
@@ -240,9 +280,12 @@ const Whiteboard = forwardRef(
                       {...commonProps}
                       x={shape.x}
                       y={shape.y}
-                      radius={Math.sqrt(shape.width ** 2 + shape.height ** 2)}
+                      radius={Math.sqrt(
+                        shape.width ** 2 + shape.height ** 2,
+                      )}
                     />
                   );
+
                 if (shape.tool === "arrow")
                   return (
                     <Arrow
@@ -254,6 +297,7 @@ const Whiteboard = forwardRef(
                       pointerWidth={10}
                     />
                   );
+
                 if (shape.tool === "text")
                   return (
                     <Text
@@ -267,9 +311,11 @@ const Whiteboard = forwardRef(
                       onDragEnd={(e) => handleTextDrag(e, shape.id)}
                     />
                   );
+
                 return null;
               })}
 
+              {/* Brush / Eraser Preview */}
               {pointerPos &&
                 (currentTool === "pen" || currentTool === "eraser") && (
                   <Circle
@@ -280,10 +326,14 @@ const Whiteboard = forwardRef(
                         ? (strokeWidth * 6) / 2
                         : strokeWidth / 2
                     }
-                    fill={currentTool === "eraser" ? "#e5e7eb" : strokeColor}
-                    stroke={currentTool === "eraser" ? "#374151" : "none"}
+                    fill={
+                      currentTool === "eraser"
+                        ? bgFill
+                        : strokeColor
+                    }
+                    stroke="#374151"
                     strokeWidth={1}
-                    opacity={0.6}
+                    opacity={0.8}
                     listening={false}
                   />
                 )}

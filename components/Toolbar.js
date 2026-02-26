@@ -1,13 +1,32 @@
 "use client";
 import React from "react";
 import {
-  Pencil, Square, Circle, ArrowUpRight,
-  Eraser, Type, Undo2, Redo2, MousePointer2, Minus
+  Pencil,
+  Square,
+  Circle,
+  ArrowUpRight,
+  Eraser,
+  Type,
+  Undo2,
+  Redo2,
+  MousePointer2,
+  Minus,
+  PaintBucket,
 } from "lucide-react";
 
 export default function Toolbar({
-  currentTool, setTool, strokeColor, setStrokeColor,
-  strokeWidth, setStrokeWidth, onUndo, onRedo, canUndo, canRedo
+  currentTool,
+  setTool,
+  strokeColor,
+  setStrokeColor,
+  strokeWidth,
+  setStrokeWidth,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
+  currentBg,
+  setBackground,
 }) {
   const tools = [
     { id: "select", icon: MousePointer2 },
@@ -20,6 +39,15 @@ export default function Toolbar({
     { id: "eraser", icon: Eraser },
   ];
 
+  const backgrounds = [
+    "#ffffff",
+    "#000000",
+    "#fef3c7",
+    "#dbeafe",
+    "#fce7f3",
+    "#dcfce7",
+  ];
+
   const toolbarStyle = {
     display: "flex",
     alignItems: "center",
@@ -29,7 +57,7 @@ export default function Toolbar({
     borderRadius: "16px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
     border: "1px solid #e5e7eb",
-    height: "48px",
+    height: "52px",
     fontSize: "14px",
   };
 
@@ -77,6 +105,17 @@ export default function Toolbar({
     width: "70px",
     cursor: "pointer",
   };
+
+  const bgButtonStyle = (selected, bg) => ({
+    width: "20px",
+    height: "20px",
+    borderRadius: "50%",
+    border: selected ? "2px solid #15803d" : "1px solid #d1d5db",
+    backgroundColor: bg,
+    cursor: "pointer",
+    transform: selected ? "scale(1.1)" : "scale(1)",
+    transition: "all 0.2s",
+  });
 
   return (
     <div style={toolbarStyle}>
@@ -134,6 +173,22 @@ export default function Toolbar({
           onChange={(e) => setStrokeWidth(+e.target.value)}
           style={rangeStyle}
         />
+      </div>
+
+      {/* Divider */}
+      <div style={sectionDividerStyle} />
+
+      {/* Background Selector */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <PaintBucket size={16} color="#16a34a" />
+        {backgrounds.map((bg) => (
+          <div
+            key={bg}
+            onClick={() => setBackground(bg)}
+            style={bgButtonStyle(currentBg === bg, bg)}
+            title="Change Background"
+          />
+        ))}
       </div>
     </div>
   );

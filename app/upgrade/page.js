@@ -11,21 +11,26 @@ export default function UpgradePage() {
   // Fetch user email on component load
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
       if (error) {
         console.error("Supabase getUser error:", error);
         return;
       }
+
       if (user) {
         setUserEmail(user.email);
       }
     };
+
     getUser();
   }, []);
 
   const handlePayment = async () => {
     if (!userEmail) {
-      alert("Please log in to upgrade.");
       return;
     }
 
@@ -42,7 +47,7 @@ export default function UpgradePage() {
       const orderData = await orderRes.json();
 
       if (!orderData.success) {
-        alert("Order creation failed");
+        setLoading(false);
         return;
       }
 
@@ -55,25 +60,36 @@ export default function UpgradePage() {
         description: "Pro Plan Subscription",
         order_id: orderData.order.id,
 
-        // 3️⃣ Prefill email
         prefill: { email: userEmail },
 
-        // 4️⃣ Payment success handler
         handler: async function (response) {
-          const verifyRes = await fetch("/api/verify-payment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...response, email: userEmail }),
-          });
+          try {
+            // Keep loader active during verification
+            setLoading(true);
 
-          const verifyData = await verifyRes.json();
+            const verifyRes = await fetch("/api/verify-payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...response, email: userEmail }),
+            });
 
-          if (verifyData.success) {
-            alert("🎉 Payment Successful! Pro Activated.");
-            window.location.href = verifyData.redirectTo || "/payment-success";
-          } else {
-            alert("Payment verification failed.");
+            const verifyData = await verifyRes.json();
+
+            if (verifyData.success) {
+              window.location.href = "/payment-success";
+            } else {
+              setLoading(false);
+            }
+          } catch (err) {
+            console.error("Verification error:", err);
+            setLoading(false);
           }
+        },
+
+        modal: {
+          ondismiss: function () {
+            setLoading(false);
+          },
         },
 
         theme: { color: "#15803d" },
@@ -81,21 +97,17 @@ export default function UpgradePage() {
 
       const razorpay = new window.Razorpay(options);
       razorpay.open();
-
     } catch (error) {
       console.error("Payment Error:", error);
-      alert("Something went wrong.");
-    } finally {
       setLoading(false);
     }
   };
 
   return (
     <>
-      {/* Razorpay script */}
       <Script src="https://checkout.razorpay.com/v1/checkout.js" />
 
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100 flex flex-col items-center justify-center px-6 py-20">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100 flex flex-col items-center justify-center px-6 py-20 relative">
         {userEmail && (
           <p className="mb-6 text-sm text-green-800 bg-green-100 px-4 py-2 rounded-full border border-green-200">
             Upgrading account: <strong>{userEmail}</strong>
@@ -103,10 +115,11 @@ export default function UpgradePage() {
         )}
 
         <div className="max-w-5xl w-full grid md:grid-cols-2 gap-10">
-
           {/* FREE PLAN */}
           <div className="bg-white rounded-3xl shadow-xl p-10 border border-green-100 opacity-80">
-            <h2 className="text-2xl font-bold text-green-700 mb-6">Free Plan</h2>
+            <h2 className="text-2xl font-bold text-green-700 mb-6">
+              Free Plan
+            </h2>
             <ul className="space-y-3 text-gray-600">
               <li>✔ Up to 10 slides</li>
               <li>✔ Watermarked slides</li>
@@ -122,7 +135,9 @@ export default function UpgradePage() {
             <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-green-700 text-white text-xs px-4 py-1 rounded-full">
               Most Popular
             </div>
-            <h2 className="text-2xl font-bold text-green-700 mb-6">Pro Plan</h2>
+            <h2 className="text-2xl font-bold text-green-700 mb-6">
+              Pro Plan
+            </h2>
             <ul className="space-y-3 text-gray-600">
               <li>✔ Up to 15 slides</li>
               <li>✔ No watermarks</li>
@@ -134,11 +149,29 @@ export default function UpgradePage() {
               disabled={loading || !userEmail}
               className="mt-8 w-full py-3 rounded-xl bg-green-700 text-white font-semibold hover:bg-green-800 transition disabled:opacity-50"
             >
-              {loading ? "Processing..." : userEmail ? "Subscribe Now" : "Please Login"}
+              {loading
+                ? "Processing..."
+                : userEmail
+                ? "Subscribe Now"
+                : "Please Login"}
             </button>
           </div>
-
         </div>
+
+        {/* 🔥 Verification Overlay */}
+        {loading && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-8 shadow-2xl text-center w-80">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-600 border-t-transparent mx-auto mb-6"></div>
+              <h3 className="text-lg font-semibold text-green-700 mb-2">
+                Verifying Payment...
+              </h3>
+              <p className="text-sm text-gray-600">
+                Please wait while we confirm your transaction.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
